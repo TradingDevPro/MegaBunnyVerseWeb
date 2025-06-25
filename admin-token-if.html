@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>tMegaCarrot Admin Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <style>
+    body { font-family: Arial; max-width: 600px; margin: 2rem auto; }
+    input, textarea, button, select { width: 100%; margin: 0.5rem 0; padding: 0.5rem; }
+    .hidden { display: none; }
+    pre { background: #f0f0f0; padding: 1rem; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h2>🐰 tMegaCarrot Admin Tool</h2>
+  <p id="status">🟡 지갑을 연결하세요...</p>
+
+  <button id="connectButton">🔗 메타마스크 연결</button>
+
+  <div id="adminPanel" class="hidden">
+    <hr/>
+    <h3>1. 셀프 민팅</h3>
+    <input type="number" id="selfAmount" placeholder="민팅할 수량 입력" />
+    <button id="selfMintBtn">🪙 셀프 민팅</button>
+
+    <hr/>
+    <h3>2. 배치 민팅</h3>
+    <textarea id="batchInput" rows="8" placeholder="주소,수량 형식으로 한 줄씩 입력"></textarea>
+    <button id="batchMintBtn">📤 배치 민팅</button>
+
+    <hr/>
+    <h3>3. 관리자 주소 추가/제거</h3>
+    <input type="text" id="adminAddress" placeholder="지정할 주소 입력" />
+    <select id="adminStatus">
+      <option value="true">✔ 관리자 추가</option>
+      <option value="false">✖ 관리자 제거</option>
+    </select>
+    <button id="setAdminBtn">🔧 setAdmin 실행</button>
+
+    <hr/>
+    <h3>4. 메타마스크에 토큰 추가</h3>
+    <button id="addTokenBtn">➕ 메타마스크에 tCarrot 추가</button>
+
+    <hr/>
+    <h3>5. tCarrot 전송</h3>
+    <p id="balanceInfo">잔고 정보를 불러오는 중...</p>
+    <input type="text" id="transferTo" placeholder="받는 주소 입력" />
+    <input type="number" id="transferAmount" placeholder="보낼 수량 입력 (예: 100)" />
+    <button id="transferBtn">📤 tCarrot 전송</button>
+
+    <hr/>
+    <pre id="log" style="white-space: pre-wrap;"></pre>
+  </div>
+
+  <script>
+    const contractAddress = "0xFf10BAfc4e97db549438d67b4f1851bC5E548b9A";
+    const contractABI = [
+      "function mint(address to, uint256 amount) external",
+      "function isAdmin(address) view returns (bool)",
+      "function setAdmin(address user, bool status) external",
+      "function transfer(address to, uint256 amount) external returns (bool)",
+      "function balanceOf(address account) view returns (uint256)"
+    ];
+
+    let provider, signer, contract;
+
+    async function connectWallet() {
+      if (typeof window.ethereum === 'undefined') {
+        alert("❌ 메타마스크가 설치되어 있어야 합니다.");
+        return;
+      }
+
+      try {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        signer = provider.getSigner();
+        const userAddress = await signer.getAddress();
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+        const isAdmin = await contract.isAdmin(userAddress);
+        document.getElementById("status").innerText = `🟢 연결됨: ${userAddress}`;
+        if (isAdmin) {
+          document.getElementById("adminPanel").classList.remove("hidden");
+        } else {
+          document.getElementById("status").innerText += "\n❌ 관리자 권한이 없습니다.";
+        }
+
+        await loadBalances();
+      } catch (err) {
+        alert("❌ 지갑 연결 실패: " + err.message);
+      }
+    }
+
+    async function loadBalances() {
+      try {
+        const userAddress = await signer.getAddress();
+        const native = await provider.getBalance(userAddress);
+        const nativeFormatted = ethers.utils.formatEther(native);
+        const token = await contract.balanceOf(userAddress);
+        const tokenFormatted = ethers.utils.formatUnits(token, 18);
+        document.getElementById("balanceInfo").innerText =
+          `💰 잔고: ${tokenFormatted} tCarrot | ${nativeFormatted} ETH`;
+      } catch (err) {
+        document.getElementById("balanceInfo").innerText = "❌ 잔고 조회 실패";
+      }
+    }
+
+    async function selfMint() {
+      const amount = document.getElementById("selfAmount").value;
+      if (!amount || isNaN(amount) || amount <= 0) return alert("유효한 수량을 입력하세요");
+      const userAddress = await signer.getAddress();
+      try {
+        const tx = await contract.mint(userAddress, ethers.utils.parseUnits(amount, 18));
+        log(`⏳ 셀프민팅 중: ${tx.hash}`);
+        await tx.wait();
+        log(`✅ 완료: ${tx.hash}`);
+        await loadBalances();
+      } catch (err) {
+        log(`❌ 오류: ${err.message}`);
+      }
+    }
+
+    async function batchMint() {
+      const input = document.getElementById("batchInput").value.trim();
+      const lines = input.split("\n").map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        const [addr, amount] = line.split(",").map(s => s.trim());
+        if (!ethers.utils.isAddress(addr) || isNaN(amount) || amount <= 0) {
+          log(`❌ 무시됨: ${line}`);
+          continue;
+        }
+        try {
+          const tx = await contract.mint(addr, ethers.utils.parseUnits(amount, 18));
+          log(`⏳ ${addr}에게 ${amount} 토큰 민팅 중: ${tx.hash}`);
+          await tx.wait();
+          log(`✅ 완료: ${tx.hash}`);
+        } catch (err) {
+          log(`❌ 실패 (${addr}): ${err.message}`);
+        }
+      }
+    }
+
+    async function setAdmin() {
+      const addr = document.getElementById("adminAddress").value.trim();
+      const status = document.getElementById("adminStatus").value === "true";
+      if (!ethers.utils.isAddress(addr)) {
+        alert("유효하지 않은 이더리움 주소입니다.");
+        return;
+      }
+      try {
+        const tx = await contract.setAdmin(addr, status);
+        log(`⏳ setAdmin(${addr}, ${status}) 실행 중: ${tx.hash}`);
+        await tx.wait();
+        log(`✅ 관리자 설정 완료: ${addr} (${status})`);
+      } catch (err) {
+        log(`❌ 관리자 설정 실패: ${err.message}`);
+      }
+    }
+
+    async function addTokenToMetaMask() {
+      const tokenImage = "https://i.imgur.com/lrSZcEf.png"; // 원하는 이미지로 교체 가능
+      try {
+        const wasAdded = await window.ethereum.request({
+          method: 'wallet_watchAsset',
+          params: {
+            type: 'ERC20',
+            options: {
+              address: contractAddress,
+              symbol: "tCarrot",
+              decimals: 18,
+              image: tokenImage,
+            },
+          },
+        });
+        if (wasAdded) {
+          log(`✅ tCarrot 토큰이 메타마스크에 추가되었습니다.`);
+        } else {
+          log(`ℹ️ 사용자가 토큰 추가를 취소했습니다.`);
+        }
+      } catch (error) {
+        log(`❌ 토큰 추가 실패: ${error.message}`);
+      }
+    }
+
+    async function transferToken() {
+      const to = document.getElementById("transferTo").value.trim();
+      const amount = document.getElementById("transferAmount").value.trim();
+      if (!ethers.utils.isAddress(to)) return alert("유효한 주소를 입력하세요.");
+      if (!amount || isNaN(amount) || Number(amount) <= 0) return alert("수량을 정확히 입력하세요.");
+      try {
+        const tx = await contract.transfer(to, ethers.utils.parseUnits(amount, 18));
+        log(`⏳ 전송 중... ${tx.hash}`);
+        await tx.wait();
+        log(`✅ 전송 완료: ${tx.hash}`);
+        await loadBalances();
+      } catch (err) {
+        log(`❌ 전송 실패: ${err.message}`);
+      }
+    }
+
+    function log(msg) {
+      const logBox = document.getElementById("log");
+      logBox.textContent += msg + "\n";
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // 이벤트 연결
+    document.getElementById("connectButton").onclick = connectWallet;
+    document.getElementById("selfMintBtn").onclick = selfMint;
+    document.getElementById("batchMintBtn").onclick = batchMint;
+    document.getElementById("setAdminBtn").onclick = setAdmin;
+    document.getElementById("addTokenBtn").onclick = addTokenToMetaMask;
+    document.getElementById("transferBtn").onclick = transferToken;
+  </script>
+</body>
+</html>
