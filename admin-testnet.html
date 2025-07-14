@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Revenue Splitter</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+<h1>Revenue Splitter UI</h1>
+
+<button onclick="connect()">🔌 Connect Wallet</button>
+<p><strong>Address:</strong> <span id="addr">Not connected</span></p>
+<p><strong>Contract:</strong> <span id="contractAddr">-</span></p> <!-- 🔹 추가된 줄 -->
+
+<hr>
+
+  <h2>💰 My Share</h2>
+  <p><strong>Total Sales Revenue:</strong> <span id="totalRevenue">-</span> ETH</p> <!-- 🔹 추가된 줄 -->
+  <p><strong>Total Allocated:</strong> <span id="totalAlloc">-</span> ETH</p>
+  <p><strong>Already Withdrawn:</strong> <span id="withdrawn">-</span> ETH</p>
+  <p><strong>Available to Withdraw:</strong> <span id="withdrawable">-</span> ETH</p>
+  <button onclick="withdraw()">⬇️ Withdraw</button>
+  <hr>
+
+  <h2>🚨 Emergency Withdraw</h2>
+  <p><strong>Contract Balance:</strong> <span id="contractBalance">-</span> ETH</p>
+  <p><strong>Emergency Approvals:</strong> <span id="approvalCount">0</span> / 5</p>
+  <button onclick="approveEmergency()">✅ Approve Emergency</button>
+
+  <p>
+    <label><strong>Receiver Address:</strong></label><br>
+    <input type="text" id="emergencyReceiver" placeholder="0x..." style="width:300px;">
+  </p>
+  <button onclick="triggerEmergency()">🔥 Trigger Emergency Withdraw</button>
+
+  <hr>
+
+  <h2>📤 Send Native Token from My Wallet <span id="myBalance">(loading...)</span></h2>
+  <p>
+    <label>Recipient Address:</label><br>
+    <input type="text" id="nativeTo" placeholder="0x..." style="width:300px;">
+  </p>
+  <p>
+    <label>Amount (ETH):</label><br>
+    <input type="number" id="nativeAmount" placeholder="0.01" step="0.001" style="width:100px;">
+  </p>
+  <button onclick="sendNative()">🚀 Send Native Token</button>
+
+  <script src="app.js"></script>
+</body>
+</html>
