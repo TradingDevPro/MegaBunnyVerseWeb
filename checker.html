@@ -95,14 +95,14 @@
         }
         #resultImageContainer {
             margin-top: 1.5rem;
-            min-height: 400px; /* 이미지가 로드되기 전 레이아웃이 깨지는 것을 방지 */
+            min-height: 300px; /* 이미지가 로드되기 전 레이아웃이 깨지는 것을 방지 */
             display: flex;
             justify-content: center;
             align-items: center;
         }
         #resultImageContainer img {
-            width: 400px;
-            height: 400px;
+            width: 300px;
+            height: 300px;
             object-fit: contain; /* 이미지가 찌그러지지 않도록 비율 유지 */
             border-radius: 8px;
         }
@@ -258,7 +258,7 @@
             if (!found) {
                 const notFoundItem = document.createElement('div');
                 notFoundItem.classList.add('result-item', 'error');
-                notFoundItem.textContent = '❌ This address is not registered in any phase.';
+                notFoundItem.textContent = '❌ This address is not registered in any phase. \nIf you think this is a mistake, please open a discord ticket.';
                 resultsDiv.appendChild(notFoundItem);
             }
 
