@@ -95,14 +95,15 @@
         }
         #resultImageContainer {
             margin-top: 1.5rem;
-            min-height: 150px; /* 이미지가 로드되기 전 레이아웃이 깨지는 것을 방지 */
+            min-height: 400px; /* 이미지가 로드되기 전 레이아웃이 깨지는 것을 방지 */
             display: flex;
             justify-content: center;
             align-items: center;
         }
         #resultImageContainer img {
-            max-width: 100%;
-            height: auto;
+            width: 400px;
+            height: 400px;
+            object-fit: contain; /* 이미지가 찌그러지지 않도록 비율 유지 */
             border-radius: 8px;
         }
         @keyframes spin {
