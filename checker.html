@@ -87,6 +87,24 @@
             display: none; /* Hidden by default */
             margin: 1rem auto 0;
         }
+        #bannerImage {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        #resultImageContainer {
+            margin-top: 1.5rem;
+            min-height: 150px; /* 이미지가 로드되기 전 레이아웃이 깨지는 것을 방지 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #resultImageContainer img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -96,10 +114,12 @@
 <body>
 
     <div class="container">
+        <img src="./images/BANNER.jpg" alt="MegaBunnyVerse Banner" id="bannerImage">
         <h1>MegaBunnyVerse Genesis Mint Whitelist Checker</h1>
         <p>Please enter your wallet address to check your whitelist status.</p>
         <input type="text" id="addressInput" placeholder="Enter your wallet address here (e.g., 0x...)">
         <button id="checkButton">Check</button>
+        <div id="resultImageContainer"></div>
         <div id="loader" class="loader"></div>
         <div id="results">
             Results will be displayed here.
@@ -119,7 +139,7 @@
          * @param {string} address - 사용자가 입력한 지갑 주소
          * @param {number[]} results - 각 페이즈별 당첨 여부 배열 [GTD, FCFS1, FCFS2] (1 or 0)
          */
-        async function logAddressCheck(address, results) {
+        async function logAddressCheck(address, results, quantity) {
             // 🚨 아래 URL을 방금 새로 배포하여 발급받은 본인의 Google Apps Script 웹 앱 URL로 교체해주세요.
             const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw-PGHroEhiXSQ_ek_RpsxWdptVGXvAvii-y3QdSfil4mFqtkO4aRTrHGztIaq8_6To/exec';
 
@@ -134,7 +154,8 @@
                         timestamp: new Date().toISOString(),
                         gtd: results[0],
                         fcfs1: results[1],
-                        fcfs2: results[2]
+                        fcfs2: results[2],
+                        total_quantity: quantity
                     })
                 });
             } catch (error) {
@@ -146,6 +167,7 @@
         const addressInput = document.getElementById('addressInput');
         const resultsDiv = document.getElementById('results');
         const loader = document.getElementById('loader');
+        const resultImageContainer = document.getElementById('resultImageContainer');
 
         checkButton.addEventListener('click', async () => {
             const addressToFind = addressInput.value.trim();
@@ -161,6 +183,7 @@
 
             loader.style.display = 'block';
             resultsDiv.innerHTML = '';
+            resultImageContainer.innerHTML = '';
             checkButton.disabled = true;
 
             let found = false;
@@ -192,13 +215,30 @@
 
             const phaseResults = await Promise.all(promises);
 
-            // --- 로깅을 위한 결과 데이터 생성 ---
+            // --- 로깅 및 이미지 표시를 위한 결과 데이터 생성 ---
             // [GTD, FCFS1, FCFS2] 순서로 0 또는 1 값을 가집니다.
             const logResults = phaseResults.map(result => (result && !result.error) ? 1 : 0);
+            const whitelistedCount = logResults.reduce((sum, current) => sum + current, 0);
+            const totalQuantity = phaseResults.reduce((sum, result) => {
+                return sum + (result && !result.error ? parseInt(result.quantity, 10) || 0 : 0);
+            }, 0);
 
             // 결과 확인 후, 주소와 결과를 함께 로그로 전송합니다.
-            logAddressCheck(addressToFind, logResults);
+            logAddressCheck(addressToFind, logResults, totalQuantity);
 
+            // --- 결과 이미지 표시 ---
+            const img = document.createElement('img');
+            let imageName;
+            if (whitelistedCount >= 3) {
+                imageName = '3.png';
+            } else {
+                imageName = `${whitelistedCount}.png`;
+            }
+            img.src = `./images/${imageName}`;
+            img.alt = `Whitelist result: ${whitelistedCount} tiers`;
+            resultImageContainer.appendChild(img);
+
+            // --- 텍스트 결과 표시 ---
             phaseResults.forEach(result => {
                 if (result) {
                     const resultItem = document.createElement('div');
