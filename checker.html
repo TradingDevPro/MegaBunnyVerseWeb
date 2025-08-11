@@ -115,12 +115,13 @@
         ];
 
         /**
-         * 사용자가 확인한 주소를 Formspree로 전송하여 기록합니다.
+         * 사용자가 확인한 주소와 그 결과를 Google Sheets에 기록합니다.
          * @param {string} address - 사용자가 입력한 지갑 주소
+         * @param {number[]} results - 각 페이즈별 당첨 여부 배열 [GTD, FCFS1, FCFS2] (1 or 0)
          */
-        async function logAddressCheck(address) {
+        async function logAddressCheck(address, results) {
             // 🚨 아래 URL을 방금 새로 배포하여 발급받은 본인의 Google Apps Script 웹 앱 URL로 교체해주세요.
-            const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbznxqDCldFCaxamJMu_udc04wL1-6LaOKmSm8cD3oXnZ-KY5eCbpj6lgIs0yWWSzwMnRQ/exec';
+            const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw-PGHroEhiXSQ_ek_RpsxWdptVGXvAvii-y3QdSfil4mFqtkO4aRTrHGztIaq8_6To/exec';
 
             try {
                 await fetch(APPS_SCRIPT_URL, {
@@ -130,7 +131,10 @@
                     // body는 여전히 JSON 문자열 형태이므로 Apps Script 코드는 변경할 필요가 없습니다.
                     body: JSON.stringify({ 
                         address: address, 
-                        timestamp: new Date().toISOString() 
+                        timestamp: new Date().toISOString(),
+                        gtd: results[0],
+                        fcfs1: results[1],
+                        fcfs2: results[2]
                     })
                 });
             } catch (error) {
@@ -154,9 +158,6 @@
                 resultsDiv.innerHTML = '<div class="result-item error">Invalid wallet address format.</div>';
                 return;
             }
-
-            // Formspree로 로그 전송 (결과를 기다리지 않고 바로 다음으로 넘어갑니다)
-            logAddressCheck(addressToFind);
 
             loader.style.display = 'block';
             resultsDiv.innerHTML = '';
@@ -190,6 +191,13 @@
             });
 
             const phaseResults = await Promise.all(promises);
+
+            // --- 로깅을 위한 결과 데이터 생성 ---
+            // [GTD, FCFS1, FCFS2] 순서로 0 또는 1 값을 가집니다.
+            const logResults = phaseResults.map(result => (result && !result.error) ? 1 : 0);
+
+            // 결과 확인 후, 주소와 결과를 함께 로그로 전송합니다.
+            logAddressCheck(addressToFind, logResults);
 
             phaseResults.forEach(result => {
                 if (result) {
