@@ -126,9 +126,8 @@
                 await fetch(APPS_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'cors',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    // Content-Type을 'text/plain'으로 변경하여 CORS pre-flight 요청을 우회합니다.
+                    // body는 여전히 JSON 문자열 형태이므로 Apps Script 코드는 변경할 필요가 없습니다.
                     body: JSON.stringify({ 
                         address: address, 
                         timestamp: new Date().toISOString() 
