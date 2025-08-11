@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MegaBunnyVerse Genesis Mint Whitelist Checker</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+        }
+        h1 {
+            color: #4a4a4a;
+            margin-bottom: 1.5rem;
+        }
+        #addressInput {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        #checkButton {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        #checkButton:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            margin-top: 1.5rem;
+            text-align: left;
+            background-color: #f9f9f9;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            min-height: 50px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .result-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid #eee;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .result-item.success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .result-item.error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none; /* Hidden by default */
+            margin: 1rem auto 0;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>MegaBunnyVerse Genesis Mint Whitelist Checker</h1>
+        <p>Please enter your wallet address to check your whitelist status.</p>
+        <input type="text" id="addressInput" placeholder="Enter your wallet address here (e.g., 0x...)">
+        <button id="checkButton">Check</button>
+        <div id="loader" class="loader"></div>
+        <div id="results">
+            Results will be displayed here.
+        </div>
+    </div>
+
+    <script>// CSV 파일 경로 설정. {phase 명칭}.csv 형태
+        // 실제 프로젝트에 맞게 파일명과 경로를 수정해주세요.
+        const phases = [
+            { name: 'GTD Phase', path: './data/GTD.csv' },
+            { name: 'FCFS1 Phase', path: './data/FCFS1.csv' },
+            { name: 'FCFS2 Phase', path: './data/FCFS2.csv' }
+        ];
+
+        /**
+         * 사용자가 확인한 주소를 Formspree로 전송하여 기록합니다.
+         * @param {string} address - 사용자가 입력한 지갑 주소
+         */
+        async function logAddressCheck(address) {
+            // 🚨 아래 URL을 방금 새로 배포하여 발급받은 본인의 Google Apps Script 웹 앱 URL로 교체해주세요.
+            const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxnuQNgTVtDV4spApYbsnhsHp39ItjiVTUprEFUPttLDJdOiUZsolpB1PzJPMpsQLSWRg/exec'; // 예: https://script.google.com/macros/s/AKfy.../exec
+
+            try {
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        address: address, 
+                        timestamp: new Date().toISOString() 
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to log address to Google Sheets:', error);
+            }
+        }
+
+        const checkButton = document.getElementById('checkButton');
+        const addressInput = document.getElementById('addressInput');
+        const resultsDiv = document.getElementById('results');
+        const loader = document.getElementById('loader');
+
+        checkButton.addEventListener('click', async () => {
+            const addressToFind = addressInput.value.trim();
+            if (!addressToFind) {
+                resultsDiv.innerHTML = '<div class="result-item error">Please enter a wallet address.</div>';
+                return;
+            }
+
+            if (!/^0x[a-fA-F0-9]{40}$/.test(addressToFind)) {
+                resultsDiv.innerHTML = '<div class="result-item error">Invalid wallet address format.</div>';
+                return;
+            }
+
+            // Formspree로 로그 전송 (결과를 기다리지 않고 바로 다음으로 넘어갑니다)
+            logAddressCheck(addressToFind);
+
+            loader.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            checkButton.disabled = true;
+
+            let found = false;
+            const targetAddress = addressToFind.toLowerCase();
+
+            const promises = phases.map(async (phase) => {
+                try {
+                    const response = await fetch(phase.path);
+                    if (!response.ok) {
+                        console.error(`Error fetching ${phase.path}: ${response.statusText}`);
+                        return { name: phase.name, error: `Failed to load data.` };
+                    }
+                    const csvData = await response.text();
+                    const lines = csvData.split(/\r?\n/).filter(line => line.trim() !== '');
+
+                    for (const line of lines) {
+                        const [address, quantity] = line.split(',').map(item => item.trim());
+                        if (address && address.toLowerCase() === targetAddress) {
+                            found = true;
+                            return { name: phase.name, quantity: quantity || 'N/A' };
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error processing ${phase.path}:`, error);
+                    return { name: phase.name, error: `An error occurred while processing the file.` };
+                }
+                return null;
+            });
+
+            const phaseResults = await Promise.all(promises);
+
+            phaseResults.forEach(result => {
+                if (result) {
+                    const resultItem = document.createElement('div');
+                    resultItem.classList.add('result-item');
+                    if (result.error) {
+                        resultItem.classList.add('error');
+                        resultItem.textContent = `[${result.name}] ${result.error}`;
+                    } else {
+                        resultItem.classList.add('success');
+                        resultItem.textContent = `✅ [${result.name}] You are on the list! Quantity: ${result.quantity}`;
+                    }
+                    resultsDiv.appendChild(resultItem);
+                }
+            });
+
+            if (!found) {
+                const notFoundItem = document.createElement('div');
+                notFoundItem.classList.add('result-item', 'error');
+                notFoundItem.textContent = '❌ This address is not registered in any phase.';
+                resultsDiv.appendChild(notFoundItem);
+            }
+
+            loader.style.display = 'none';
+            checkButton.disabled = false;
+        });
+    </script>
+
+</body>
+</html>
