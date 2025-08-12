@@ -133,24 +133,24 @@
             {
                 name: 'GTD Phase',
                 sources: [
-                    { path: './data/GTD-collab.csv', message: '✅ [GTD Phase] COLLAB GA WINNER!' },
-                    { path: './data/GTD-preview1.csv', message: '✅ [GTD Phase] TESTNET PREVIEW-1 HOLDER! (Will be updated again)' },
-                    { path: './data/GTD-og.csv', message: '✅ [GTD Phase] OG MEMBER!' },
-                    { path: './data/GTD-team.csv', message: '✅ [GTD Phase] TEAM MEMBER!' }
+                    { path: './data/GTD-collab.csv', message: '[GTD Phase] COLLAB GA WINNER!' },
+                    { path: './data/GTD-preview1.csv', message: '[GTD Phase] TESTNET PREVIEW-1 HOLDER!' },
+                    { path: './data/GTD-og.csv', message: '[GTD Phase] OG MEMBER!' },
+                    { path: './data/GTD-team.csv', message: '[GTD Phase] TEAM MEMBER!' }
                     // 다른 GTD 자격 조건이 있다면 여기에 추가하세요.
                 ]
             },
             {
                 name: 'FCFS1 Phase',
                 sources: [
-                    { path: './data/FCFS1-collab.csv', message: '✅ [FCFS1 Phase] COLLAB GA WINNER!' },
-                    { path: './data/FCFS1-preview2.csv', message: '✅ [FCFS1 Phase] TESTNET PREVIEW-2 HOLDER! (Will be updated again)' }
+                    { path: './data/FCFS1-collab.csv', message: '[FCFS1 Phase] COLLAB GA WINNER!' },
+                    { path: './data/FCFS1-preview2.csv', message: '[FCFS1 Phase] TESTNET PREVIEW-2 HOLDER!' }
                 ]
             },
             {
                 name: 'FCFS2 Phase',
                 sources: [
-                    { path: './data/FCFS2-testnet1fcfs.csv', message: '✅ [FCFS2 Phase] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
+                    { path: './data/FCFS2-testnet1fcfs.csv', message: '[FCFS2 Phase] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
                 ]
             }
         ];
@@ -297,9 +297,8 @@
 
                         let textContent = data.details.map(detail => `${detail.message} Quantity: ${detail.quantity}`).join('\n');
 
-                        if (data.details.length > 1) {
-                            textContent += `\n\nTotal Quantity for ${phase.name}: ${data.totalQuantity}`;
-                        }
+                        // 사용자가 해당 Phase에 하나라도 포함되면, 항상 종합 수량을 보여줍니다.
+                        textContent += `\n\n✅ Total Quantity for ${phase.name}: ${data.totalQuantity}`;
                         resultItem.textContent = textContent;
                         resultsDiv.appendChild(resultItem);
                     }
