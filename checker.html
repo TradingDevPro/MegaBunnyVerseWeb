@@ -64,10 +64,13 @@
         }
         .result-item {
             padding: 0.5rem;
-            border-bottom: 1px solid #eee;
+            padding-bottom: 1rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #e0e0e0;
         }
         .result-item:last-child {
             border-bottom: none;
+            margin-bottom: 0;
         }
         .result-item.success {
             color: #28a745;
@@ -75,6 +78,12 @@
         }
         .result-item.error {
             color: #dc3545;
+            font-weight: bold;
+        }
+        .total-quantity {
+            margin-top: 1rem;
+            color: #FE1010;
+            font-size: 1.15em;
             font-weight: bold;
         }
         .loader {
@@ -131,26 +140,26 @@
         // 실제 프로젝트에 맞게 파일명과 경로를 수정해주세요.
         const phases = [
             {
-                name: 'GTD Phase',
+                name: 'PHASE1 - GTD',
                 sources: [
-                    { path: './data/GTD-collab.csv', message: '[GTD Phase] COLLAB GA WINNER!' },
-                    { path: './data/GTD-preview1.csv', message: '[GTD Phase] TESTNET PREVIEW-1 HOLDER!' },
-                    { path: './data/GTD-og.csv', message: '[GTD Phase] OG MEMBER!' },
-                    { path: './data/GTD-team.csv', message: '[GTD Phase] TEAM MEMBER!' }
+                    { path: './data/GTD-collab.csv', message: '[PHASE1] COLLAB GA WINNER!' },
+                    { path: './data/GTD-preview1.csv', message: '[PHASE1] TESTNET PREVIEW-1 HOLDER!' },
+                    { path: './data/GTD-og.csv', message: '[PHASE1] OG MEMBER!' },
+                    { path: './data/GTD-team.csv', message: '[PHASE1] TEAM MEMBER!' }
                     // 다른 GTD 자격 조건이 있다면 여기에 추가하세요.
                 ]
             },
             {
-                name: 'FCFS1 Phase',
+                name: 'PHASE2 - FCFS1',
                 sources: [
-                    { path: './data/FCFS1-collab.csv', message: '[FCFS1 Phase] COLLAB GA WINNER!' },
-                    { path: './data/FCFS1-preview2.csv', message: '[FCFS1 Phase] TESTNET PREVIEW-2 HOLDER!' }
+                    { path: './data/FCFS1-collab.csv', message: '[PHASE2] COLLAB GA WINNER!' },
+                    { path: './data/FCFS1-preview2.csv', message: '[PHASE2] TESTNET PREVIEW-2 HOLDER!' }
                 ]
             },
             {
-                name: 'FCFS2 Phase',
+                name: 'PHASE3 - FCFS2',
                 sources: [
-                    { path: './data/FCFS2-testnet1fcfs.csv', message: '[FCFS2 Phase] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
+                    { path: './data/FCFS2-testnet1fcfs.csv', message: '[PHASE3] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
                 ]
             }
         ];
@@ -295,11 +304,18 @@
                         const resultItem = document.createElement('div');
                         resultItem.classList.add('result-item', 'success');
 
-                        let textContent = data.details.map(detail => `${detail.message} Quantity: ${detail.quantity}`).join('\n');
+                        // 각 자격 요건에 대한 상세 내용을 표시합니다.
+                        const detailsNode = document.createTextNode(
+                            data.details.map(detail => `${detail.message} Quantity: ${detail.quantity}`).join('\n')
+                        );
+                        resultItem.appendChild(detailsNode);
 
-                        // 사용자가 해당 Phase에 하나라도 포함되면, 항상 종합 수량을 보여줍니다.
-                        textContent += `\n\n✅ Total Quantity for ${phase.name}: ${data.totalQuantity}`;
-                        resultItem.textContent = textContent;
+                        // 별도의 스타일이 적용된 종합 수량을 표시합니다.
+                        const totalNode = document.createElement('div');
+                        totalNode.className = 'total-quantity';
+                        totalNode.textContent = `✅ Total Quantity for ${phase.name}: ${data.totalQuantity}`;
+                        resultItem.appendChild(totalNode);
+
                         resultsDiv.appendChild(resultItem);
                     }
                 });
