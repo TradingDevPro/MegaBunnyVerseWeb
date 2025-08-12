@@ -130,9 +130,29 @@
     <script>// CSV 파일 경로 설정. {phase 명칭}.csv 형태
         // 실제 프로젝트에 맞게 파일명과 경로를 수정해주세요.
         const phases = [
-            { name: 'GTD Phase', path: './data/MVB-MAINNET-GTD.csv' },
-            { name: 'FCFS1 Phase', path: './data/MVB-MAINNET-FCFS1.csv' },
-            { name: 'FCFS2 Phase', path: './data/MVB-MAINNET-FCFS2.csv' }
+            {
+                name: 'GTD Phase',
+                sources: [
+                    { path: './data/GTD-collab.csv', message: '✅ [GTD Phase] COLLAB GA WINNER!' },
+                    { path: './data/GTD-preview1.csv', message: '✅ [GTD Phase] TESTNET PREVIEW-1 HOLDER! (Will be updated again)' },
+                    { path: './data/GTD-og.csv', message: '✅ [GTD Phase] OG MEMBER!' },
+                    { path: './data/GTD-team.csv', message: '✅ [GTD Phase] TEAM MEMBER!' }
+                    // 다른 GTD 자격 조건이 있다면 여기에 추가하세요.
+                ]
+            },
+            {
+                name: 'FCFS1 Phase',
+                sources: [
+                    { path: './data/FCFS1-collab.csv', message: '✅ [FCFS1 Phase] COLLAB GA WINNER!' },
+                    { path: './data/FCFS1-preview2.csv', message: '✅ [FCFS1 Phase] TESTNET PREVIEW-2 HOLDER! (Will be updated again)' }
+                ]
+            },
+            {
+                name: 'FCFS2 Phase',
+                sources: [
+                    { path: './data/FCFS2-testnet1fcfs.csv', message: '✅ [FCFS1 Phase] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
+                ]
+            }
         ];
 
         /**
@@ -190,12 +210,17 @@
             let found = false;
             const targetAddress = addressToFind.toLowerCase();
 
-            const promises = phases.map(async (phase) => {
+            // 모든 소스 파일을 하나의 배열로 만듭니다.
+            const allSources = phases.flatMap(phase =>
+                phase.sources.map(source => ({ ...source, phaseName: phase.name }))
+            );
+
+            const promises = allSources.map(async (source) => {
                 try {
-                    const response = await fetch(phase.path);
+                    const response = await fetch(source.path);
                     if (!response.ok) {
-                        console.error(`Error fetching ${phase.path}: ${response.statusText}`);
-                        return { name: phase.name, error: `Failed to load data.` };
+                        console.error(`Error fetching ${source.path}: ${response.statusText}`);
+                        return null; // 파일이 없어도 다른 확인은 계속 진행합니다.
                     }
                     const csvData = await response.text();
                     const lines = csvData.split(/\r?\n/).filter(line => line.trim() !== '');
@@ -204,25 +229,32 @@
                         const [address, quantity] = line.split(',').map(item => item.trim());
                         if (address && address.toLowerCase() === targetAddress) {
                             found = true;
-                            return { name: phase.name, quantity: quantity || 'N/A' };
+                            return {
+                                phaseName: source.phaseName,
+                                message: source.message,
+                                quantity: quantity || 'N/A'
+                            };
                         }
                     }
                 } catch (error) {
-                    console.error(`Error processing ${phase.path}:`, error);
-                    return { name: phase.name, error: `An error occurred while processing the file.` };
+                    console.error(`Error processing ${source.path}:`, error);
+                    return null;
                 }
                 return null;
             });
 
-            const phaseResults = await Promise.all(promises);
+            // 모든 확인 작업이 끝날 때까지 기다린 후, null이 아닌 결과만 필터링합니다.
+            const checkResults = (await Promise.all(promises)).filter(result => result !== null);
 
-            // --- 로깅 및 이미지 표시를 위한 결과 데이터 생성 ---
-            // [GTD, FCFS1, FCFS2] 순서로 0 또는 1 값을 가집니다.
-            const logResults = phaseResults.map(result => (result && !result.error) ? 1 : 0);
-            const whitelistedCount = logResults.reduce((sum, current) => sum + current, 0);
-            const totalQuantity = phaseResults.reduce((sum, result) => {
-                return sum + (result && !result.error ? parseInt(result.quantity, 10) || 0 : 0);
+            // --- 로깅 및 이미지 표시를 위한 결과 집계 ---
+            const foundPhases = new Set(checkResults.map(r => r.phaseName));
+            const whitelistedCount = foundPhases.size;
+            const totalQuantity = checkResults.reduce((sum, result) => {
+                return sum + (parseInt(result.quantity, 10) || 0);
             }, 0);
+
+            // Google Sheets 로깅을 위한 [1, 0, 1] 형태의 배열 생성
+            const logResults = phases.map(phase => foundPhases.has(phase.name) ? 1 : 0);
 
             // 결과 확인 후, 주소와 결과를 함께 로그로 전송합니다.
             logAddressCheck(addressToFind, logResults, totalQuantity);
@@ -230,36 +262,48 @@
             // --- 결과 이미지 표시 ---
             const img = document.createElement('img');
             let imageName;
-            if (whitelistedCount >= 3) {
-                imageName = '3.png';
-            } else {
-                imageName = `${whitelistedCount}.png`;
-            }
+            imageName = whitelistedCount >= 3 ? '3.png' : `${whitelistedCount}.png`;
             img.src = `./images/${imageName}`;
             img.alt = `Whitelist result: ${whitelistedCount} tiers`;
             resultImageContainer.appendChild(img);
 
             // --- 텍스트 결과 표시 ---
-            phaseResults.forEach(result => {
-                if (result) {
-                    const resultItem = document.createElement('div');
-                    resultItem.classList.add('result-item');
-                    if (result.error) {
-                        resultItem.classList.add('error');
-                        resultItem.textContent = `[${result.name}] ${result.error}`;
-                    } else {
-                        resultItem.classList.add('success');
-                        resultItem.textContent = `✅ [${result.name}] You are on the list! Quantity: ${result.quantity}`;
-                    }
-                    resultsDiv.appendChild(resultItem);
-                }
-            });
-
             if (!found) {
                 const notFoundItem = document.createElement('div');
                 notFoundItem.classList.add('result-item', 'error');
                 notFoundItem.textContent = '❌ This address is not registered in any phase. \nIf you think this is a mistake, please open a discord ticket.';
                 resultsDiv.appendChild(notFoundItem);
+            } else {
+                // 결과를 phase 별로 집계합니다.
+                const aggregatedResults = checkResults.reduce((acc, result) => {
+                    const { phaseName, message, quantity } = result;
+                    if (!acc[phaseName]) {
+                        acc[phaseName] = {
+                            details: [],
+                            totalQuantity: 0
+                        };
+                    }
+                    acc[phaseName].details.push({ message: message, quantity: quantity });
+                    acc[phaseName].totalQuantity += parseInt(quantity, 10) || 0;
+                    return acc;
+                }, {});
+
+                // 집계된 결과를 phase 순서대로 화면에 표시합니다.
+                phases.forEach(phase => {
+                    if (aggregatedResults[phase.name]) {
+                        const data = aggregatedResults[phase.name];
+                        const resultItem = document.createElement('div');
+                        resultItem.classList.add('result-item', 'success');
+
+                        let textContent = data.details.map(detail => `${detail.message} Quantity: ${detail.quantity}`).join('\n');
+
+                        if (data.details.length > 1) {
+                            textContent += `\n\nTotal Quantity for ${phase.name}: ${data.totalQuantity}`;
+                        }
+                        resultItem.textContent = textContent;
+                        resultsDiv.appendChild(resultItem);
+                    }
+                });
             }
 
             loader.style.display = 'none';
