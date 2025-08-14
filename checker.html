@@ -54,6 +54,10 @@
   <div class="container">
     <img src="./images/BANNER.jpg" alt="MegaBunnyVerse Banner" id="bannerImage" />
     <h1>MegaBunnyVerse Genesis Mint Whitelist Checker</h1>
+    <p style="font-weight: bold; color: #555;">
+      Mint date: Will be announced soon. (Approx. 8/21~8/22) <br>
+      Please stay tuned and check our Discord/X announcement.
+    </p>
     <p>Please enter your wallet address to check your whitelist status.</p>
     <input type="text" id="addressInput" placeholder="Enter your wallet address here (e.g., 0x...)" />
     <button id="checkButton">Check</button>
@@ -64,7 +68,6 @@
 
   <script>
   document.addEventListener('DOMContentLoaded', () => {
-    // ====== 설정 ======
     const phases = [
       {
         name: 'PHASE1 - GTD',
@@ -90,64 +93,52 @@
       }
     ];
 
-    // ====== 엘리먼트 ======
     const checkButton = document.getElementById('checkButton');
     const addressInput = document.getElementById('addressInput');
     const resultsDiv = document.getElementById('results');
     const loader = document.getElementById('loader');
     const resultImageContainer = document.getElementById('resultImageContainer');
 
-    // 널 가드(아이디 오타 등 방지)
-    if (!checkButton || !addressInput || !resultsDiv || !loader || !resultImageContainer) {
-      console.error('Required DOM elements not found. Check element IDs.');
-      return;
-    }
-
-    // ====== 로깅: 페이즈별 수량을 기록 ======
     async function logAddressCheck(address, resultsOrQuantities, quantity) {
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEftowOs-6oLyGL5IsgEgs67BY97KokPvPwmLOuT7JfLvQH0GzuaZM2_VT0S5lrkGcag/exec';
+      const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEftowOs-6oLyGL5IsgEgs67BY97KokPvPwmLOuT7JfLvQH0GzuaZM2_VT0S5lrkGcag/exec';
 
-        // 보낼 페이로드 구성 (당신 코드 구조 유지: [GTD, FCFS1, FCFS2] 또는 수량 객체 모두 지원)
-        const payload = Array.isArray(resultsOrQuantities)
-            ? { // 구버전: 1/0 플래그 배열
-                address,
-                timestamp: new Date().toISOString(),
-                gtd:   resultsOrQuantities[0] || 0,
-                fcfs1: resultsOrQuantities[1] || 0,
-                fcfs2: resultsOrQuantities[2] || 0,
-                total_quantity: quantity ?? 0
-            }
-            : { // 신버전: 수량 객체 {gtd, fcfs1, fcfs2}
-                address,
-                timestamp: new Date().toISOString(),
-                gtd_qty:   resultsOrQuantities.gtd   ?? 0,
-                fcfs1_qty: resultsOrQuantities.fcfs1 ?? 0,
-                fcfs2_qty: resultsOrQuantities.fcfs2 ?? 0,
-                total_quantity: quantity ?? (
-                (resultsOrQuantities.gtd||0)
-                + (resultsOrQuantities.fcfs1||0)
-                + (resultsOrQuantities.fcfs2||0)
-                )
-            };
+      const payload = Array.isArray(resultsOrQuantities)
+        ? {
+            address,
+            timestamp: new Date().toISOString(),
+            gtd:   resultsOrQuantities[0] || 0,
+            fcfs1: resultsOrQuantities[1] || 0,
+            fcfs2: resultsOrQuantities[2] || 0,
+            total_quantity: quantity ?? 0
+          }
+        : {
+            address,
+            timestamp: new Date().toISOString(),
+            gtd_qty:   resultsOrQuantities.gtd   ?? 0,
+            fcfs1_qty: resultsOrQuantities.fcfs1 ?? 0,
+            fcfs2_qty: resultsOrQuantities.fcfs2 ?? 0,
+            total_quantity: quantity ?? (
+              (resultsOrQuantities.gtd||0)
+              + (resultsOrQuantities.fcfs1||0)
+              + (resultsOrQuantities.fcfs2||0)
+            )
+          };
 
-        try {
-            // 1) 가능하면 sendBeacon으로 전송 (페이지 이동/닫힘에도 안정적)
-            const ok = navigator.sendBeacon?.(
-            APPS_SCRIPT_URL,
-            new Blob([JSON.stringify(payload)], { type: 'text/plain;charset=UTF-8' })
-            );
-            if (ok) return;
+      try {
+        const beaconOk = navigator.sendBeacon?.(
+          APPS_SCRIPT_URL,
+          new Blob([JSON.stringify(payload)], { type: 'text/plain;charset=UTF-8' })
+        );
+        if (beaconOk) return;
 
-            // 2) 실패 시 fetch(no-cors)로 우회 (응답을 읽지 않음)
-            await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',                // ✅ 핵심: CORS 검증 우회
-            // 헤더를 지정하지 않으면 브라우저가 text/plain으로 보내며 preflight도 피함
-            body: JSON.stringify(payload)   // GAS doPost에서 e.postData.contents로 수신
-            });
-        } catch (err) {
-            console.error('Failed to log address to Google Sheets:', err);
-        }
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        console.error('Failed to log address to Google Sheets:', err);
+      }
     }
 
     checkButton.addEventListener('click', async () => {
@@ -177,10 +168,7 @@
       const promises = allSources.map(async (source) => {
         try {
           const response = await fetch(source.path);
-          if (!response.ok) {
-            console.error(`Error fetching ${source.path}: ${response.statusText}`);
-            return null;
-          }
+          if (!response.ok) return null;
           const csvData = await response.text();
           const lines = csvData.split(/\r?\n/).filter(line => line.trim() !== '');
 
@@ -196,7 +184,6 @@
             }
           }
         } catch (error) {
-          console.error(`Error processing ${source.path}:`, error);
           return null;
         }
         return null;
@@ -204,7 +191,6 @@
 
       const checkResults = (await Promise.all(promises)).filter(Boolean);
 
-      // 집계
       const aggregatedResults = checkResults.reduce((acc, result) => {
         const { phaseName, message, quantity } = result;
         if (!acc[phaseName]) acc[phaseName] = { details: [], totalQuantity: 0 };
@@ -220,10 +206,8 @@
       const fcfs2Qty = getPhaseQty('PHASE3 - FCFS2');
       const totalQuantity = gtdQty + fcfs1Qty + fcfs2Qty;
 
-      // 로그 전송(수량 기준)
       await logAddressCheck(addressToFind, { gtd: gtdQty, fcfs1: fcfs1Qty, fcfs2: fcfs2Qty }, totalQuantity);
 
-      // 결과 이미지 (매칭된 페이즈 개수 기준)
       const whitelistedCount = ['PHASE1 - GTD', 'PHASE2 - FCFS1', 'PHASE3 - FCFS2']
         .filter(name => getPhaseQty(name) > 0).length;
 
@@ -232,7 +216,6 @@
       img.alt = `Whitelist result: ${whitelistedCount} tiers`;
       resultImageContainer.appendChild(img);
 
-      // 텍스트 결과
       if (!found) {
         const notFoundItem = document.createElement('div');
         notFoundItem.classList.add('result-item', 'error');
