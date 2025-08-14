@@ -1,185 +1,243 @@
-<script>
-// CSV 파일 경로 설정. {phase 명칭}.csv 형태
-const phases = [
-  {
-    name: 'PHASE1 - GTD',
-    sources: [
-      { path: './data/GTD-collab.csv',   message: '[PHASE1] COLLAB GA WINNER!' },
-      { path: './data/GTD-preview1.csv', message: '[PHASE1] TESTNET PREVIEW-1 HOLDER!' },
-      { path: './data/GTD-og.csv',       message: '[PHASE1] OG MEMBER!' },
-      { path: './data/GTD-team.csv',     message: '[PHASE1] TEAM MEMBER!' }
-    ]
-  },
-  {
-    name: 'PHASE2 - FCFS1',
-    sources: [
-      { path: './data/FCFS1-collab.csv',  message: '[PHASE2] COLLAB GA WINNER!' },
-      { path: './data/FCFS1-preview2.csv',message: '[PHASE2] TESTNET PREVIEW-2 HOLDER!' }
-    ]
-  },
-  {
-    name: 'PHASE3 - FCFS2',
-    sources: [
-      { path: './data/FCFS2-testnet1fcfs.csv', message: '[PHASE3] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
-    ]
-  }
-];
-
-/**
- * 사용자가 확인한 주소와 결과를 Google Sheets에 기록(페이즈 '수량' 기준)
- * @param {string} address
- * @param {{gtd:number, fcfs1:number, fcfs2:number}} quantities
- * @param {number} totalQuantity
- */
-async function logAddressCheck(address, quantities, totalQuantity) {
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEftowOs-6oLyGL5IsgEgs67BY97KokPvPwmLOuT7JfLvQH0GzuaZM2_VT0S5lrkGcag/exec';
-  try {
-    await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'cors',
-      // 헤더 미지정으로 preflight 회피(본문은 JSON 문자열)
-      body: JSON.stringify({
-        address,
-        timestamp: new Date().toISOString(),
-        // 수량 기반 필드(신규)
-        gtd_qty:   quantities.gtd,
-        fcfs1_qty: quantities.fcfs1,
-        fcfs2_qty: quantities.fcfs2,
-        total_quantity: totalQuantity
-        // 구버전(1/0) 필드를 보내지 않아도 되지만,
-        // 후방 호환이 필요하면 아래를 함께 보낼 수도 있음:
-        // gtd: quantities.gtd > 0 ? 1 : 0,
-        // fcfs1: quantities.fcfs1 > 0 ? 1 : 0,
-        // fcfs2: quantities.fcfs2 > 0 ? 1 : 0,
-      })
-    });
-  } catch (error) {
-    console.error('Failed to log address to Google Sheets:', error);
-  }
-}
-
-const checkButton = document.getElementById('checkButton');
-const addressInput = document.getElementById('addressInput');
-const resultsDiv = document.getElementById('results');
-const loader = document.getElementById('loader');
-const resultImageContainer = document.getElementById('resultImageContainer');
-
-checkButton.addEventListener('click', async () => {
-  const addressToFind = addressInput.value.trim();
-  if (!addressToFind) {
-    resultsDiv.innerHTML = '<div class="result-item error">Please enter a wallet address.</div>';
-    return;
-  }
-  if (!/^0x[a-fA-F0-9]{40}$/.test(addressToFind)) {
-    resultsDiv.innerHTML = '<div class="result-item error">Invalid wallet address format.</div>';
-    return;
-  }
-
-  loader.style.display = 'block';
-  resultsDiv.innerHTML = '';
-  resultImageContainer.innerHTML = '';
-  checkButton.disabled = true;
-
-  let found = false;
-  const targetAddress = addressToFind.toLowerCase();
-
-  // 모든 소스 배열로 평탄화
-  const allSources = phases.flatMap(phase =>
-    phase.sources.map(source => ({ ...source, phaseName: phase.name }))
-  );
-
-  const promises = allSources.map(async (source) => {
-    try {
-      const response = await fetch(source.path);
-      if (!response.ok) {
-        console.error(`Error fetching ${source.path}: ${response.statusText}`);
-        return null;
-      }
-      const csvData = await response.text();
-      const lines = csvData.split(/\r?\n/).filter(line => line.trim() !== '');
-
-      for (const line of lines) {
-        const [address, quantity] = line.split(',').map(item => item.trim());
-        if (address && address.toLowerCase() === targetAddress) {
-          found = true;
-          return {
-            phaseName: source.phaseName,
-            message: source.message,
-            quantity: quantity || '0'
-          };
-        }
-      }
-    } catch (error) {
-      console.error(`Error processing ${source.path}:`, error);
-      return null;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MegaBunnyVerse Genesis Mint Whitelist Checker</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f4f4f9; color: #333;
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; margin: 0;
     }
-    return null;
-  });
-
-  const checkResults = (await Promise.all(promises)).filter(Boolean);
-
-  // --- 결과 집계 ---
-  const aggregatedResults = checkResults.reduce((acc, result) => {
-    const { phaseName, message, quantity } = result;
-    if (!acc[phaseName]) {
-      acc[phaseName] = { details: [], totalQuantity: 0 };
+    .container {
+      background: #fff; padding: 2rem; border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,.1);
+      text-align: center; width: 90%; max-width: 600px;
     }
-    acc[phaseName].details.push({ message, quantity });
-    acc[phaseName].totalQuantity += parseInt(quantity, 10) || 0;
-    return acc;
-  }, {});
+    h1 { color: #4a4a4a; margin-bottom: 1.5rem; }
+    #addressInput {
+      width: calc(100% - 22px); padding: 10px; margin-bottom: 1rem;
+      border: 1px solid #ddd; border-radius: 4px; font-size: 1rem;
+    }
+    #checkButton {
+      width: 100%; padding: 12px; background: #007bff; color: #fff;
+      border: 0; border-radius: 4px; cursor: pointer;
+      font-size: 1rem; font-weight: 700; transition: background-color .3s;
+    }
+    #checkButton:hover { background: #0056b3; }
+    #results {
+      margin-top: 1.5rem; text-align: left; background: #f9f9f9;
+      padding: 1rem; border-radius: 4px; border: 1px solid #eee;
+      min-height: 50px; white-space: pre-wrap; word-wrap: break-word;
+    }
+    .result-item {
+      padding: .5rem 0 1rem; margin-bottom: 1rem; border-bottom: 1px solid #e0e0e0;
+    }
+    .result-item:last-child { border-bottom: 0; margin-bottom: 0; }
+    .result-item.success { color: #28a745; font-weight: 700; }
+    .result-item.error { color: #dc3545; font-weight: 700; }
+    .total-quantity { margin-top: 1rem; color: #FE1010; font-size: 1.15em; font-weight: 700; }
+    .loader {
+      border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%;
+      width: 20px; height: 20px; animation: spin 1s linear infinite;
+      display: none; margin: 1rem auto 0;
+    }
+    #bannerImage { width: 100%; height: auto; border-radius: 8px; margin-bottom: 1.5rem; }
+    #resultImageContainer { margin-top: 1.5rem; min-height: 300px; display: flex; justify-content: center; align-items: center; }
+    #resultImageContainer img { width: 300px; height: 300px; object-fit: contain; border-radius: 8px; }
+    @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="./images/BANNER.jpg" alt="MegaBunnyVerse Banner" id="bannerImage" />
+    <h1>MegaBunnyVerse Genesis Mint Whitelist Checker</h1>
+    <p>Please enter your wallet address to check your whitelist status.</p>
+    <input type="text" id="addressInput" placeholder="Enter your wallet address here (e.g., 0x...)" />
+    <button id="checkButton">Check</button>
+    <div id="resultImageContainer"></div>
+    <div id="loader" class="loader"></div>
+    <div id="results">Results will be displayed here.</div>
+  </div>
 
-  // 페이즈별 총 수량(없으면 0)
-  const getPhaseQty = (phaseName) =>
-    aggregatedResults[phaseName]?.totalQuantity || 0;
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // ====== 설정 ======
+    const phases = [
+      {
+        name: 'PHASE1 - GTD',
+        sources: [
+          { path: './data/GTD-collab.csv',   message: '[PHASE1] COLLAB GA WINNER!' },
+          { path: './data/GTD-preview1.csv', message: '[PHASE1] TESTNET PREVIEW-1 HOLDER!' },
+          { path: './data/GTD-og.csv',       message: '[PHASE1] OG MEMBER!' },
+          { path: './data/GTD-team.csv',     message: '[PHASE1] TEAM MEMBER!' }
+        ]
+      },
+      {
+        name: 'PHASE2 - FCFS1',
+        sources: [
+          { path: './data/FCFS1-collab.csv',   message: '[PHASE2] COLLAB GA WINNER!' },
+          { path: './data/FCFS1-preview2.csv', message: '[PHASE2] TESTNET PREVIEW-2 HOLDER!' }
+        ]
+      },
+      {
+        name: 'PHASE3 - FCFS2',
+        sources: [
+          { path: './data/FCFS2-testnet1fcfs.csv', message: '[PHASE3] TESTNET PREVIEW-1 FCFS PARTICIPANT!' }
+        ]
+      }
+    ];
 
-  const gtdQty   = getPhaseQty('PHASE1 - GTD');
-  const fcfs1Qty = getPhaseQty('PHASE2 - FCFS1');
-  const fcfs2Qty = getPhaseQty('PHASE3 - FCFS2');
+    // ====== 엘리먼트 ======
+    const checkButton = document.getElementById('checkButton');
+    const addressInput = document.getElementById('addressInput');
+    const resultsDiv = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const resultImageContainer = document.getElementById('resultImageContainer');
 
-  const totalQuantity = gtdQty + fcfs1Qty + fcfs2Qty;
+    // 널 가드(아이디 오타 등 방지)
+    if (!checkButton || !addressInput || !resultsDiv || !loader || !resultImageContainer) {
+      console.error('Required DOM elements not found. Check element IDs.');
+      return;
+    }
 
-  // 로깅(이제 수량 기반으로 기록)
-  await logAddressCheck(addressToFind, { gtd: gtdQty, fcfs1: fcfs1Qty, fcfs2: fcfs2Qty }, totalQuantity);
+    // ====== 로깅: 페이즈별 수량을 기록 ======
+    async function logAddressCheck(address, quantities, totalQuantity) {
+      const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEftowOs-6oLyGL5IsgEgs67BY97KokPvPwmLOuT7JfLvQH0GzuaZM2_VT0S5lrkGcag/exec';
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'cors',
+          body: JSON.stringify({
+            address,
+            timestamp: new Date().toISOString(),
+            gtd_qty:   quantities.gtd,
+            fcfs1_qty: quantities.fcfs1,
+            fcfs2_qty: quantities.fcfs2,
+            total_quantity: totalQuantity
+          })
+        });
+      } catch (err) {
+        console.error('Failed to log address to Google Sheets:', err);
+      }
+    }
 
-  // --- 결과 이미지 (단순히 '페이즈 매칭 개수' 기준 유지) ---
-  const whitelistedCount = ['PHASE1 - GTD', 'PHASE2 - FCFS1', 'PHASE3 - FCFS2']
-    .filter(name => getPhaseQty(name) > 0).length;
+    checkButton.addEventListener('click', async () => {
+      const addressToFind = addressInput.value.trim();
 
-  const img = document.createElement('img');
-  img.src = `./images/${whitelistedCount >= 3 ? '3.png' : `${whitelistedCount}.png`}`;
-  img.alt = `Whitelist result: ${whitelistedCount} tiers`;
-  resultImageContainer.appendChild(img);
+      if (!addressToFind) {
+        resultsDiv.innerHTML = '<div class="result-item error">Please enter a wallet address.</div>';
+        return;
+      }
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addressToFind)) {
+        resultsDiv.innerHTML = '<div class="result-item error">Invalid wallet address format.</div>';
+        return;
+      }
 
-  // --- 텍스트 결과 표시 ---
-  if (!found) {
-    const notFoundItem = document.createElement('div');
-    notFoundItem.classList.add('result-item', 'error');
-    notFoundItem.textContent = '❌ This address is not registered in any phase. \nIf you think this is a mistake, please open a discord ticket.';
-    resultsDiv.appendChild(notFoundItem);
-  } else {
-    phases.forEach(phase => {
-      const data = aggregatedResults[phase.name];
-      if (!data) return;
+      loader.style.display = 'block';
+      resultsDiv.innerHTML = '';
+      resultImageContainer.innerHTML = '';
+      checkButton.disabled = true;
 
-      const resultItem = document.createElement('div');
-      resultItem.classList.add('result-item', 'success');
+      let found = false;
+      const targetAddress = addressToFind.toLowerCase();
 
-      const detailsNode = document.createTextNode(
-        data.details.map(d => `${d.message} Quantity: ${d.quantity}`).join('\n')
+      const allSources = phases.flatMap(phase =>
+        phase.sources.map(source => ({ ...source, phaseName: phase.name }))
       );
-      resultItem.appendChild(detailsNode);
 
-      const totalNode = document.createElement('div');
-      totalNode.className = 'total-quantity';
-      totalNode.textContent = `✅ Total Quantity for ${phase.name}: ${data.totalQuantity}`;
-      resultItem.appendChild(totalNode);
+      const promises = allSources.map(async (source) => {
+        try {
+          const response = await fetch(source.path);
+          if (!response.ok) {
+            console.error(`Error fetching ${source.path}: ${response.statusText}`);
+            return null;
+          }
+          const csvData = await response.text();
+          const lines = csvData.split(/\r?\n/).filter(line => line.trim() !== '');
 
-      resultsDiv.appendChild(resultItem);
+          for (const line of lines) {
+            const [address, quantity] = line.split(',').map(item => item.trim());
+            if (address && address.toLowerCase() === targetAddress) {
+              found = true;
+              return {
+                phaseName: source.phaseName,
+                message: source.message,
+                quantity: quantity || '0'
+              };
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing ${source.path}:`, error);
+          return null;
+        }
+        return null;
+      });
+
+      const checkResults = (await Promise.all(promises)).filter(Boolean);
+
+      // 집계
+      const aggregatedResults = checkResults.reduce((acc, result) => {
+        const { phaseName, message, quantity } = result;
+        if (!acc[phaseName]) acc[phaseName] = { details: [], totalQuantity: 0 };
+        acc[phaseName].details.push({ message, quantity });
+        acc[phaseName].totalQuantity += parseInt(quantity, 10) || 0;
+        return acc;
+      }, {});
+
+      const getPhaseQty = (name) => aggregatedResults[name]?.totalQuantity || 0;
+
+      const gtdQty   = getPhaseQty('PHASE1 - GTD');
+      const fcfs1Qty = getPhaseQty('PHASE2 - FCFS1');
+      const fcfs2Qty = getPhaseQty('PHASE3 - FCFS2');
+      const totalQuantity = gtdQty + fcfs1Qty + fcfs2Qty;
+
+      // 로그 전송(수량 기준)
+      await logAddressCheck(addressToFind, { gtd: gtdQty, fcfs1: fcfs1Qty, fcfs2: fcfs2Qty }, totalQuantity);
+
+      // 결과 이미지 (매칭된 페이즈 개수 기준)
+      const whitelistedCount = ['PHASE1 - GTD', 'PHASE2 - FCFS1', 'PHASE3 - FCFS2']
+        .filter(name => getPhaseQty(name) > 0).length;
+
+      const img = document.createElement('img');
+      img.src = `./images/${whitelistedCount >= 3 ? '3.png' : `${whitelistedCount}.png`}`;
+      img.alt = `Whitelist result: ${whitelistedCount} tiers`;
+      resultImageContainer.appendChild(img);
+
+      // 텍스트 결과
+      if (!found) {
+        const notFoundItem = document.createElement('div');
+        notFoundItem.classList.add('result-item', 'error');
+        notFoundItem.textContent = '❌ This address is not registered in any phase. \nIf you think this is a mistake, please open a discord ticket.';
+        resultsDiv.appendChild(notFoundItem);
+      } else {
+        phases.forEach(phase => {
+          const data = aggregatedResults[phase.name];
+          if (!data) return;
+
+          const resultItem = document.createElement('div');
+          resultItem.classList.add('result-item', 'success');
+
+          const detailsNode = document.createTextNode(
+            data.details.map(d => `${d.message} Quantity: ${d.quantity}`).join('\n')
+          );
+          resultItem.appendChild(detailsNode);
+
+          const totalNode = document.createElement('div');
+          totalNode.className = 'total-quantity';
+          totalNode.textContent = `✅ Total Quantity for ${phase.name}: ${data.totalQuantity}`;
+          resultItem.appendChild(totalNode);
+
+          resultsDiv.appendChild(resultItem);
+        });
+      }
+
+      loader.style.display = 'none';
+      checkButton.disabled = false;
     });
-  }
-
-  loader.style.display = 'none';
-  checkButton.disabled = false;
-});
-</script>
+  });
+  </script>
+</body>
+</html>
